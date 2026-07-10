@@ -1,29 +1,46 @@
 <main class="shell">
   <div class="cosmos">
     <canvas #sceneCanvas class="scene"></canvas>
+    <div class="star-noise"></div>
+    <div class="horizon-grid"></div>
     <div class="nebula nebula-a"></div>
     <div class="nebula nebula-b"></div>
   </div>
 
+  <nav class="topbar">
+    <a class="brand" href="#" aria-label="Orbit home">
+      <span class="brand-mark"><i></i></span>
+      <span>ORBIT<span class="brand-dot">.</span></span>
+    </a>
+    <div class="system-status"><i></i> System synchronized</div>
+    <div class="date-code">{{ selectedDate() | date: 'yy.MM.dd' }}</div>
+  </nav>
+
   <section class="hero">
     <div class="hero-copy">
-      <p class="eyebrow">Creative TODO Orbit</p>
-      <h1>Shape a day that looks as intentional as it feels.</h1>
+      <p class="eyebrow"><span>01</span> Creative TODO Orbit</p>
+      <h1>Design your <em>momentum.</em></h1>
       <p class="lede">
-        A cinematic day planner built with Angular, .NET, SQLite, and a radial interface that turns
-        ordinary tasks into visible momentum.
+        A spatial day planner that turns time into an explorable system. Plot your tasks, protect
+        your energy, and make progress visible.
       </p>
+      <div class="hero-metrics">
+        <div><strong>{{ tasks().length | number: '2.0-0' }}</strong><span>Objects in orbit</span></div>
+        <div><strong>{{ completionLabel() }}</strong><span>Signal complete</span></div>
+        <div><strong>{{ metrics()?.focusMinutes ?? 0 }}</strong><span>Focus minutes</span></div>
+      </div>
     </div>
 
     <div class="hero-actions">
-      <button type="button" class="ghost" (click)="shiftDay(-1)">Prev</button>
-      <button type="button" class="solid" (click)="jumpToToday()">Today</button>
-      <button type="button" class="ghost" (click)="shiftDay(1)">Next</button>
+      <button type="button" class="ghost" (click)="shiftDay(-1)"><span>←</span> Prev</button>
+      <button type="button" class="solid" (click)="jumpToToday()">Center today</button>
+      <button type="button" class="ghost" (click)="shiftDay(1)">Next <span>→</span></button>
     </div>
   </section>
 
   <section class="dashboard-grid" *ngIf="!loading(); else loadingState">
     <article class="ring-card">
+      <div class="panel-index">A / 01</div>
       <div class="card-header">
         <div>
           <p class="eyebrow">Orbital View</p>
@@ -34,6 +51,8 @@
       </div>
 
       <div class="ring-stage">
+        <div class="orbit orbit-one"></div>
+        <div class="orbit orbit-two"></div>
         <svg viewBox="0 0 360 360" class="ring-svg" aria-label="Daily task ring">
           <circle cx="180" cy="180" r="128" class="ring-base"></circle>
 
@@ -79,6 +98,7 @@
         </svg>
 
         <div class="ring-core">
+          <span class="core-pulse"></span>
           <p class="eyebrow">Completion</p>
           <h3>{{ completionLabel() }}</h3>
           <p>{{ tasks().length }} tasks in orbit</p>
@@ -91,6 +111,7 @@
     </article>
 
     <article class="stats-card">
+      <div class="panel-index">B / 02</div>
       <div class="card-header">
         <div>
           <p class="eyebrow">Day Signals</p>
@@ -135,6 +156,7 @@
     </article>
 
     <article class="editor-card">
+      <div class="panel-index">C / 03</div>
       <div class="card-header">
         <div>
           <p class="eyebrow">Compose</p>

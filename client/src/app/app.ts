@@ -12,6 +12,9 @@ import {
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { TodoApiService } from './todo-api.service';
 import { DashboardResponse, TaskCategory, TodoTask, UpsertTaskRequest } from './todo.models';
 
@@ -71,10 +74,14 @@ export class App {
   );
 
   private renderer?: THREE.WebGLRenderer;
+  private composer?: EffectComposer;
   private scene?: THREE.Scene;
   private camera?: THREE.PerspectiveCamera;
-  private halo?: THREE.Mesh;
-  private particles?: THREE.Points;
+  private orbitalSystem?: THREE.Group;
+  private starLayers: THREE.Points[] = [];
+  private energyRibbons: THREE.Line[] = [];
+  private clock = new THREE.Clock();
+  private pointer = new THREE.Vector2();
   private animationFrame?: number;
 
   constructor() {
@@ -321,43 +328,36 @@ export class App {
     }
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(45, host.clientWidth / host.clientHeight, 0.1, 100);
-    this.camera.position.z = 5;
+    this.scene.fog = new THREE.FogExp2(0x040711, 0.085);
+    this.camera = new THREE.PerspectiveCamera(42, host.clientWidth / host.clientHeight, 0.1, 100);
+    this.camera.position.set(0, 0, 8);
 
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(host.clientWidth, host.clientHeight);
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.15;
 
-    const haloGeometry = new THREE.TorusGeometry(1.55, 0.18, 32, 180);
-    const haloMaterial = new THREE.MeshBasicMaterial({
-      color: '#6c78ff',
-      transparent: true,
-      opacity: 0.24
-    });
-    this.halo = new THREE.Mesh(haloGeometry, haloMaterial);
-    this.halo.rotation.x = 1.08;
-    this.halo.rotation.y = 0.38;
-    this.scene.add(this.halo);
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.composer.addPass(
+      new UnrealBloomPass(
+        new THREE.Vector2(host.clientWidth, host.clientHeight),
+        window.matchMedia('(max-width: 720px)').matches ? 0.65 : 1.05,
+        0.7,
+        0.12
+      )
+    );
 
-    const points = new Float32Array(900);
-    for (let index = 0; index < points.length; index += 3) {
-      points[index] = (Math.random() - 0.5) * 7;
-      points[index + 1] = (Math.random() - 0.5) * 4.5;
-      points[index + 2] = (Math.random() - 0.5) * 4;
-    }
+    this.orbitalSystem = this.createOrbitalSystem();
+    this.orbitalSystem.position.set(2.8, 0.1, -0.8);
+    this.scene.add(this.orbitalSystem);
+    this.createStarField();
 
-    const particleGeometry = new THREE.BufferGeometry();
-    particleGeometry.setAttribute('position', new THREE.BufferAttribute(points, 3));
-
-    const particleMaterial = new THREE.PointsMaterial({
-      color: '#d9f2ff',
-      size: 0.02,
-      transparent: true,
-      opacity: 0.8
-    });
-
-    this.particles = new THREE.Points(particleGeometry, particleMaterial);
-    this.scene.add(this.particles);
+    const onPointerMove = (event: PointerEvent) => {
+      this.pointer.set((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
+    };
 
     const onResize = () => {
       if (!this.renderer || !this.camera) {
@@ -367,28 +367,140 @@ export class App {
       this.camera.aspect = host.clientWidth / host.clientHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(host.clientWidth, host.clientHeight);
+      this.composer?.setSize(host.clientWidth, host.clientHeight);
     };
 
     window.addEventListener('resize', onResize);
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
     this.destroyRef.onDestroy(() => {
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('pointermove', onPointerMove);
       if (this.animationFrame) {
         cancelAnimationFrame(this.animationFrame);
       }
+      this.scene?.traverse((object) => {
+        if (object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Line) {
+          object.geometry.dispose();
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach((material) => material.dispose());
+        }
+      });
+      this.composer?.dispose();
       this.renderer?.dispose();
     });
 
     const render = () => {
       this.animationFrame = requestAnimationFrame(render);
-      if (this.halo) {
-        this.halo.rotation.z += 0.0015;
+      const elapsed = this.clock.getElapsedTime();
+
+      if (this.orbitalSystem) {
+        this.orbitalSystem.rotation.y = elapsed * 0.08 + this.pointer.x * 0.12;
+        this.orbitalSystem.rotation.x = Math.sin(elapsed * 0.22) * 0.08 - this.pointer.y * 0.08;
+        this.orbitalSystem.position.y = Math.sin(elapsed * 0.45) * 0.12;
       }
-      if (this.particles) {
-        this.particles.rotation.y += 0.0008;
-      }
-      this.renderer?.render(this.scene!, this.camera!);
+
+      this.energyRibbons.forEach((ribbon, index) => {
+        ribbon.rotation.z = elapsed * (index % 2 ? -0.09 : 0.07);
+        ribbon.rotation.y = elapsed * 0.035 + index;
+      });
+      this.starLayers.forEach((stars, index) => {
+        stars.rotation.y = elapsed * (0.006 + index * 0.003);
+        stars.position.x += (this.pointer.x * (index + 1) * 0.06 - stars.position.x) * 0.015;
+      });
+
+      this.camera!.position.x += (this.pointer.x * 0.28 - this.camera!.position.x) * 0.018;
+      this.camera!.position.y += (this.pointer.y * 0.18 - this.camera!.position.y) * 0.018;
+      this.camera!.lookAt(0, 0, 0);
+      this.composer?.render();
     };
 
     render();
+  }
+
+  private createOrbitalSystem(): THREE.Group {
+    const group = new THREE.Group();
+    const core = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.82, 5),
+      new THREE.MeshBasicMaterial({ color: 0x07121d, wireframe: true, transparent: true, opacity: 0.7 })
+    );
+    group.add(core);
+
+    const glowCore = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.48, 2),
+      new THREE.MeshBasicMaterial({ color: 0x7df9ff, transparent: true, opacity: 0.24 })
+    );
+    group.add(glowCore);
+
+    const colors = [0x5af2ff, 0xff4fd8, 0xffc857];
+    [1.35, 1.82, 2.28].forEach((radius, index) => {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(radius, index === 1 ? 0.025 : 0.012, 12, 220),
+        new THREE.MeshBasicMaterial({ color: colors[index], transparent: true, opacity: 0.62 })
+      );
+      ring.rotation.set(0.72 + index * 0.42, index * 0.55, index * 0.8);
+      group.add(ring);
+    });
+
+    for (let index = 0; index < 18; index++) {
+      const angle = (index / 18) * Math.PI * 2;
+      const radius = 1.38 + (index % 3) * 0.44;
+      const satellite = new THREE.Mesh(
+        new THREE.SphereGeometry(index % 5 === 0 ? 0.075 : 0.032, 10, 10),
+        new THREE.MeshBasicMaterial({ color: colors[index % colors.length] })
+      );
+      satellite.position.set(Math.cos(angle) * radius, Math.sin(angle * 1.7) * 0.5, Math.sin(angle) * radius);
+      group.add(satellite);
+    }
+
+    for (let ribbonIndex = 0; ribbonIndex < 3; ribbonIndex++) {
+      const points = Array.from({ length: 180 }, (_, index) => {
+        const angle = (index / 179) * Math.PI * 2;
+        const radius = 2.65 + Math.sin(angle * (3 + ribbonIndex)) * 0.1;
+        return new THREE.Vector3(
+          Math.cos(angle) * radius,
+          Math.sin(angle * 2 + ribbonIndex) * 0.38,
+          Math.sin(angle) * radius
+        );
+      });
+      const ribbon = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(points),
+        new THREE.LineBasicMaterial({ color: colors[ribbonIndex], transparent: true, opacity: 0.28 })
+      );
+      ribbon.rotation.x = ribbonIndex * 0.75;
+      this.energyRibbons.push(ribbon);
+      group.add(ribbon);
+    }
+
+    return group;
+  }
+
+  private createStarField(): void {
+    const colors = [0xc7f8ff, 0x6edcff, 0xff8de1];
+    [900, 550, 220].forEach((count, layer) => {
+      const positions = new Float32Array(count * 3);
+      for (let index = 0; index < positions.length; index += 3) {
+        const radius = 5 + Math.random() * 15;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        positions[index] = radius * Math.sin(phi) * Math.cos(theta);
+        positions[index + 1] = radius * Math.sin(phi) * Math.sin(theta);
+        positions[index + 2] = radius * Math.cos(phi) - 4;
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const stars = new THREE.Points(
+        geometry,
+        new THREE.PointsMaterial({
+          color: colors[layer],
+          size: 0.018 + layer * 0.016,
+          transparent: true,
+          opacity: 0.42 + layer * 0.18,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending
+        })
+      );
+      this.starLayers.push(stars);
+      this.scene?.add(stars);
+    });
   }
 }

@@ -3,4 +3,6 @@ client/dist/
 server/bin/
 server/obj/
 server/*.db
+server/*.db-shm
+server/*.db-wal
 *.log
