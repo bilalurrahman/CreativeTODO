@@ -1,0 +1,267 @@
+<main class="shell">
+  <div class="cosmos">
+    <canvas #sceneCanvas class="scene"></canvas>
+    <div class="nebula nebula-a"></div>
+    <div class="nebula nebula-b"></div>
+  </div>
+
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Creative TODO Orbit</p>
+      <h1>Shape a day that looks as intentional as it feels.</h1>
+      <p class="lede">
+        A cinematic day planner built with Angular, .NET, SQLite, and a radial interface that turns
+        ordinary tasks into visible momentum.
+      </p>
+    </div>
+
+    <div class="hero-actions">
+      <button type="button" class="ghost" (click)="shiftDay(-1)">Prev</button>
+      <button type="button" class="solid" (click)="jumpToToday()">Today</button>
+      <button type="button" class="ghost" (click)="shiftDay(1)">Next</button>
+    </div>
+  </section>
+
+  <section class="dashboard-grid" *ngIf="!loading(); else loadingState">
+    <article class="ring-card">
+      <div class="card-header">
+        <div>
+          <p class="eyebrow">Orbital View</p>
+          <h2>{{ selectedDate() | date: 'EEEE' }}</h2>
+          <p class="subtle">{{ selectedDate() | date: 'd MMMM y' }}</p>
+        </div>
+        <button type="button" class="icon-button" (click)="newTask()">+ New Task</button>
+      </div>
+
+      <div class="ring-stage">
+        <svg viewBox="0 0 360 360" class="ring-svg" aria-label="Daily task ring">
+          <circle cx="180" cy="180" r="128" class="ring-base"></circle>
+
+          <ng-container *ngFor="let marker of hourMarkers()">
+            <line
+              [attr.x1]="marker.x1"
+              [attr.y1]="marker.y1"
+              [attr.x2]="marker.x2"
+              [attr.y2]="marker.y2"
+              class="hour-marker"
+            ></line>
+            <text
+              [attr.x]="marker.labelX"
+              [attr.y]="marker.labelY"
+              class="hour-label"
+              text-anchor="middle"
+              alignment-baseline="middle"
+            >
+              {{ marker.label }}
+            </text>
+          </ng-container>
+
+          <ng-container *ngFor="let segment of ringSegments()">
+            <path
+              [attr.d]="segment.path"
+              class="task-arc"
+              [attr.stroke]="segment.task.accentColor"
+              [class.active]="segment.task.id === selectedTask().id"
+              [class.done]="segment.task.isCompleted"
+              (click)="editTask(segment.task)"
+            ></path>
+            <text
+              [attr.x]="segment.labelX"
+              [attr.y]="segment.labelY"
+              class="segment-label"
+              text-anchor="middle"
+              alignment-baseline="middle"
+              [attr.transform]="'rotate(' + segment.textRotation + ' ' + segment.labelX + ' ' + segment.labelY + ')'"
+            >
+              {{ segment.task.title }}
+            </text>
+          </ng-container>
+        </svg>
+
+        <div class="ring-core">
+          <p class="eyebrow">Completion</p>
+          <h3>{{ completionLabel() }}</h3>
+          <p>{{ tasks().length }} tasks in orbit</p>
+        </div>
+      </div>
+
+      <div class="insights">
+        <div class="insight" *ngFor="let insight of insights()">{{ insight }}</div>
+      </div>
+    </article>
+
+    <article class="stats-card">
+      <div class="card-header">
+        <div>
+          <p class="eyebrow">Day Signals</p>
+          <h2>Energy mix</h2>
+        </div>
+      </div>
+
+      <div class="metrics" *ngIf="metrics() as metricSet">
+        <div class="metric">
+          <span>Focus</span>
+          <strong>{{ metricSet.focusMinutes }}</strong>
+          <small>minutes</small>
+        </div>
+        <div class="metric">
+          <span>Ritual</span>
+          <strong>{{ metricSet.ritualMinutes }}</strong>
+          <small>minutes</small>
+        </div>
+        <div class="metric">
+          <span>Recharge</span>
+          <strong>{{ metricSet.rechargeMinutes }}</strong>
+          <small>minutes</small>
+        </div>
+      </div>
+
+      <div class="task-list">
+        <button
+          type="button"
+          class="task-row"
+          *ngFor="let task of tasks(); trackBy: trackByTaskId"
+          [class.selected]="task.id === selectedTask().id"
+          (click)="editTask(task)"
+        >
+          <span class="swatch" [style.background]="task.accentColor"></span>
+          <span class="task-meta">
+            <strong>{{ task.title }}</strong>
+            <small>{{ formatTimeRange(task) }}</small>
+          </span>
+          <span class="status" [class.done]="task.isCompleted">{{ task.category }}</span>
+        </button>
+      </div>
+    </article>
+
+    <article class="editor-card">
+      <div class="card-header">
+        <div>
+          <p class="eyebrow">Compose</p>
+          <h2>{{ form().id ? 'Refine selected task' : 'Launch a new task' }}</h2>
+        </div>
+      </div>
+
+      <form class="editor-form" (ngSubmit)="submitTask()">
+        <label>
+          <span>Title</span>
+          <input [ngModel]="form().title" (ngModelChange)="patchForm('title', $event)" name="title" />
+        </label>
+
+        <label>
+          <span>Notes</span>
+          <textarea
+            [ngModel]="form().notes"
+            (ngModelChange)="patchForm('notes', $event)"
+            name="notes"
+            rows="3"
+          ></textarea>
+        </label>
+
+        <div class="form-grid">
+          <label>
+            <span>Category</span>
+            <select
+              [ngModel]="form().category"
+              (ngModelChange)="patchForm('category', $event)"
+              name="category"
+            >
+              <option *ngFor="let category of categories" [value]="category">{{ category }}</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Date</span>
+            <input
+              type="date"
+              [ngModel]="form().scheduledDate"
+              (ngModelChange)="patchForm('scheduledDate', $event)"
+              name="scheduledDate"
+            />
+          </label>
+
+          <label>
+            <span>Start</span>
+            <input
+              type="time"
+              [ngModel]="form().startTime"
+              (ngModelChange)="patchForm('startTime', $event)"
+              name="startTime"
+            />
+          </label>
+
+          <label>
+            <span>Duration</span>
+            <input
+              type="number"
+              min="15"
+              step="15"
+              [ngModel]="form().durationMinutes"
+              (ngModelChange)="patchForm('durationMinutes', +$event)"
+              name="durationMinutes"
+            />
+          </label>
+
+          <label>
+            <span>Energy</span>
+            <input
+              type="range"
+              min="1"
+              max="5"
+              [ngModel]="form().energy"
+              (ngModelChange)="patchForm('energy', +$event)"
+              name="energy"
+            />
+          </label>
+
+          <label class="toggle">
+            <span>Completed</span>
+            <input
+              type="checkbox"
+              [ngModel]="form().isCompleted"
+              (ngModelChange)="patchForm('isCompleted', $event)"
+              name="isCompleted"
+            />
+          </label>
+        </div>
+
+        <div class="palette">
+          <button
+            type="button"
+            class="palette-chip"
+            *ngFor="let color of palette"
+            [style.background]="color"
+            [class.selected]="color === form().accentColor"
+            (click)="patchForm('accentColor', color)"
+          ></button>
+        </div>
+
+        <div class="editor-actions">
+          <button type="submit" class="solid" [disabled]="saving()">
+            {{ saving() ? 'Saving...' : form().id ? 'Update Task' : 'Create Task' }}
+          </button>
+          <button type="button" class="ghost" (click)="deleteSelectedTask()">
+            {{ form().id ? 'Delete Task' : 'Reset Form' }}
+          </button>
+          <button
+            *ngIf="selectedTask() as activeTask"
+            type="button"
+            class="ghost"
+            (click)="toggleCompletion(activeTask)"
+          >
+            {{ activeTask.isCompleted ? 'Mark Active' : 'Mark Complete' }}
+          </button>
+        </div>
+      </form>
+
+      <p class="error" *ngIf="error()">{{ error() }}</p>
+    </article>
+  </section>
+
+  <ng-template #loadingState>
+    <section class="loading-card">
+      <p class="eyebrow">Initializing Orbit</p>
+      <h2>Loading your day map...</h2>
+    </section>
+  </ng-template>
+</main>
