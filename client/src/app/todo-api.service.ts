@@ -5,7 +5,7 @@ import { DashboardResponse, TodoTask, UpsertTaskRequest } from './todo.models';
 @Injectable({ providedIn: 'root' })
 export class TodoApiService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = 'http://localhost:5242/api';
+  private readonly baseUrl = '/api';
 
   getDashboard(date: string) {
     return this.http.get<DashboardResponse>(`${this.baseUrl}/dashboard`, {
