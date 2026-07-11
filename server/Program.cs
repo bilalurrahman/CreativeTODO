@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 using server.Data;
 using server.Models;
+using server.Api;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -171,6 +172,8 @@ static void ApplyRequest(TodoTask task, UpsertTaskRequest request)
     task.IsCompleted = request.IsCompleted;
 }
 
+namespace server.Api
+{
 public record DashboardResponse(
     DateOnly SelectedDate,
     TaskDto[] Tasks,
@@ -223,4 +226,5 @@ public record TaskDto(
             task.Energy,
             task.IsCompleted
         );
+}
 }
