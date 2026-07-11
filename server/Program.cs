@@ -68,6 +68,8 @@ app.MapGet("/api/dashboard", async (DateOnly? date, TodoDbContext db) =>
     return Results.Ok(response);
 });
 
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
 app.MapPost("/api/tasks", async (UpsertTaskRequest request, TodoDbContext db) =>
 {
     var task = new TodoTask();

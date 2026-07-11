@@ -39,6 +39,14 @@ interface RingSegment {
   textRotation: number;
 }
 
+interface ClockTick {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  major: boolean;
+}
+
 @Component({
   selector: 'app-root',
   imports: [CommonModule, FormsModule, DatePipe],
@@ -60,6 +68,7 @@ export class App {
   protected readonly dashboard = signal<DashboardResponse | null>(null);
   protected readonly selectedTaskId = signal<number | null>(null);
   protected readonly form = signal<TaskFormValue>(this.createDefaultForm(this.today()));
+  protected readonly currentTime = signal(new Date());
 
   protected readonly tasks = computed(() => this.dashboard()?.tasks ?? []);
   protected readonly metrics = computed(() => this.dashboard()?.metrics);
@@ -71,6 +80,16 @@ export class App {
   protected readonly ringSegments = computed(() => this.buildRingSegments(this.tasks()));
   protected readonly hourMarkers = computed(() =>
     Array.from({ length: 24 }, (_, hour) => this.createMarker(hour))
+  );
+  protected readonly clockTicks = Array.from({ length: 96 }, (_, index) => this.createClockTick(index));
+  protected readonly isToday = computed(() => this.selectedDate() === this.today());
+  protected readonly liveClockRotation = computed(() => {
+    const time = this.currentTime();
+    const minutes = time.getHours() * 60 + time.getMinutes() + time.getSeconds() / 60;
+    return (minutes / 1440) * 360;
+  });
+  protected readonly liveTimeLabel = computed(() =>
+    this.currentTime().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   );
 
   private renderer?: THREE.WebGLRenderer;
@@ -86,6 +105,8 @@ export class App {
 
   constructor() {
     afterNextRender(() => this.initializeScene());
+    const clockTimer = window.setInterval(() => this.currentTime.set(new Date()), 1000);
+    this.destroyRef.onDestroy(() => window.clearInterval(clockTimer));
     void this.loadDay();
   }
 
@@ -282,6 +303,22 @@ export class App {
       labelX: 180 + labelRadius * Math.cos(radians),
       labelY: 180 + labelRadius * Math.sin(radians),
       label: `${hour.toString().padStart(2, '0')}:00`
+    };
+  }
+
+  private createClockTick(index: number): ClockTick {
+    const angle = (index / 96) * 360;
+    const radians = (angle - 90) * (Math.PI / 180);
+    const major = index % 4 === 0;
+    const outer = 174;
+    const inner = major ? 163 : index % 2 === 0 ? 167 : 170;
+
+    return {
+      x1: 180 + outer * Math.cos(radians),
+      y1: 180 + outer * Math.sin(radians),
+      x2: 180 + inner * Math.cos(radians),
+      y2: 180 + inner * Math.sin(radians),
+      major
     };
   }
 

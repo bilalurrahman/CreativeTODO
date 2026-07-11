@@ -54,7 +54,28 @@
         <div class="orbit orbit-one"></div>
         <div class="orbit orbit-two"></div>
         <svg viewBox="0 0 360 360" class="ring-svg" aria-label="Daily task ring">
+          <defs>
+            <filter id="clockGlow" x="-100%" y="-100%" width="300%" height="300%">
+              <feGaussianBlur stdDeviation="3" result="blur"></feGaussianBlur>
+              <feMerge>
+                <feMergeNode in="blur"></feMergeNode>
+                <feMergeNode in="SourceGraphic"></feMergeNode>
+              </feMerge>
+            </filter>
+          </defs>
           <circle cx="180" cy="180" r="128" class="ring-base"></circle>
+
+          <g class="chronograph-ticks" aria-hidden="true">
+            <line
+              *ngFor="let tick of clockTicks"
+              [attr.x1]="tick.x1"
+              [attr.y1]="tick.y1"
+              [attr.x2]="tick.x2"
+              [attr.y2]="tick.y2"
+              class="clock-tick"
+              [class.major]="tick.major"
+            ></line>
+          </g>
 
           <ng-container *ngFor="let marker of hourMarkers()">
             <line
@@ -95,6 +116,18 @@
               {{ segment.task.title }}
             </text>
           </ng-container>
+
+          <g
+            *ngIf="isToday()"
+            class="live-hand"
+            [attr.transform]="'rotate(' + liveClockRotation() + ' 180 180)'"
+            aria-hidden="true"
+          >
+            <line x1="180" y1="199" x2="180" y2="48" class="hand-glow"></line>
+            <line x1="180" y1="199" x2="180" y2="48" class="hand-stem"></line>
+            <circle cx="180" cy="48" r="3.2" class="hand-tip"></circle>
+          </g>
+          <circle *ngIf="isToday()" cx="180" cy="180" r="5" class="hand-pivot"></circle>
         </svg>
 
         <div class="ring-core">
@@ -102,6 +135,7 @@
           <p class="eyebrow">Completion</p>
           <h3>{{ completionLabel() }}</h3>
           <p>{{ tasks().length }} tasks in orbit</p>
+          <div class="live-time" *ngIf="isToday()"><i></i>{{ liveTimeLabel() }} live</div>
         </div>
       </div>
 
